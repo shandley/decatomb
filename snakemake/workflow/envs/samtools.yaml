@@ -1,0 +1,10 @@
+name: samtools
+channels:
+    - conda-forge
+    - bioconda
+    - defaults
+dependencies:
+    - samtools=1.12
+    - seqkit=0.16.1
+    - csvtk=0.23.0
+
