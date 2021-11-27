@@ -4,23 +4,16 @@ Snakemake rule file to preprocess Illumina sequence data for virome analysis.
 What is accomplished with this script?
     - Non-biological sequence removal (primers, adapters)
     - Host sequence removal
-    - Removal of redundant sequences (clustering)
-        - Creation of sequence count table
-        - Calculation of sequence properties (e.g. GC content, tetramer frequencies)
-    - Assembly
+        - Assembly
         - Sample assembly
         - Population assembly
-        - Contig abundance esitmation
+        - Contig abundance estimation
 
 Additional Reading:
     - Hecatomb GitHub: https://github.com/shandley/hecatomb
     - Official Snakemake documentation: https://snakemake.readthedocs.io/en/stable/
 
-Version Notes:
-- Updated Snakefile based on [contaminant_removal.sh](../base/contaminant_removal.sh)
-
-Rob Edwards, Jan 2020
-Updated: Scott Handley, March 2021
+Scott Handley (handley.scott@gmail.com), November 2021
 """
 
 import os
@@ -35,7 +28,7 @@ rule remove_5prime_primer:
     
     Step 01: Remove 5' primer.
     
-    Default RdA/B Primer sequences are provided in  the file primerB.fa. If your lab uses other primers you will need to place them in CONPATH (defined in the Snakefile) and change the file name from primerB.fa to your file name below.
+    Default RdA/B Primer sequences are provided in the file primerB.fa. If your lab uses other primers you will need to place them in CONPATH (defined in the Snakefile) and change the file name from primerB.fa to your file name below.
     
     """
     input:
@@ -377,182 +370,6 @@ rule remove_exact_dups:
         dedupe.sh in={input} out={output} \
         ac=f ow=t \
         -Xmx{config[System][Memory]}g 2> {log};
-        """
-          
-rule cluster_similar_sequences:
-    """
-    
-    Step 09: Cluster similar sequences at CLUSTERID in config.yaml. Default: 97% identity
-    
-    """
-    input:
-        os.path.join(QC, "CLUSTERED", PATTERN_R1 + ".deduped.out.fastq")
-    output:
-        os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + "_rep_seq.fasta"),
-        os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + "_cluster.tsv"),
-        temporary(os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + "_all_seqs.fasta"))
-    priority: 1
-    params:
-        respath=os.path.join(QC, "CLUSTERED", "LINCLUST"),
-        tmppath=os.path.join(QC, "CLUSTERED", "LINCLUST", "TMP"),
-        prefix=PATTERN_R1
-    benchmark:
-        os.path.join(BENCH, "PREPROCESSING", "s09.cluster_similar_seqs_{sample}.txt")
-    log:
-        log = os.path.join(LOGS, "step_09", "s09_{sample}.log")
-    resources:
-        mem_mb=100000,
-        cpus=64
-    conda:
-        "../envs/linclust.yaml"
-    shell:
-        """ 
-        mmseqs easy-linclust {input} {params.respath}/{params.prefix} {params.tmppath} \
-        --kmer-per-seq-scale 0.3 \
-        -c {config[CLUSTERID]} --cov-mode 1 --threads {config[System][Threads]} &>> {log};
-        """
-        
-rule create_individual_seqtables:
-    """
-    
-    Step 10: Create individual seqtables. A seqtable is a count table with each sequence as a row, each column as a sample and each cell the counts of each sequence per sample.
-    
-    """
-    input:
-        seqs=os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + "_rep_seq.fasta"),
-        counts=os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + "_cluster.tsv")
-    output:
-        seqs=os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + ".seqs"),
-        counts=os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + ".counts"),
-        seqtable=os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + ".seqtable")
-    params:
-        prefix=PATTERN
-    benchmark:
-        os.path.join(BENCH, "PREPROCESSING", "s10.individual_seq_tables_{sample}.txt")
-    log:
-        log = os.path.join(LOGS, "step_10", "s10_{sample}.log")
-    resources:
-        mem_mb=100000,
-        cpus=64
-    conda:
-        "../envs/seqkit.yaml"
-    shell:
-        """
-        seqkit sort {input.seqs} --quiet -j {config[System][Threads]} -w 5000 -t dna | \
-        seqkit fx2tab -j {config[System][Threads]} -w 5000 -t dna | \
-        sed 's/\\t\\+$//' | \
-        cut -f2,3 | \
-        sed '1i sequence' > {output.seqs};
-        
-        cut -f1 {input.counts} | \
-        sort | \
-        uniq -c | \
-        awk -F ' ' '{{print$2"\\t"$1}}' | \
-        cut -f2 | \
-        sed "1i {params.prefix}" > {output.counts};
-        
-        paste {output.seqs} {output.counts} > {output.seqtable};
-        """
-        
-rule merge_individual_seqtables:
-    """
-    
-    Step 11: Merge individual sequence tables into combined seqtable
-    
-    """
-    input:
-        files = expand(os.path.join(QC, "CLUSTERED", "LINCLUST", PATTERN_R1 + ".seqtable"), sample=SAMPLES)
-    output:
-        seqtable = os.path.join(RESULTS, "seqtable_all.tsv"),
-        tab2fx = temporary(os.path.join(RESULTS, "seqtable.tab2fx"))
-    params:
-        resultsdir = directory(RESULTS),
-    benchmark:
-        os.path.join(BENCH, "PREPROCESSING", "s11.merge_seq_tables.txt")
-    log:
-        log = os.path.join(LOGS, "step_11", "s11.log")
-    resources:
-        mem_mb=100000,
-        cpus=64
-    params:
-        resultsdir = directory(RESULTS),
-    conda:
-        "../envs/R.yaml"
-    script:
-        "../scripts/seqtable_merge.R"
-
-rule convert_seqtable_tab_to_fasta:
-    """
-    
-    Step 12: Convert tabular seqtable output to fasta and create index
-    
-    """
-    input:
-        os.path.join(RESULTS, "seqtable.tab2fx")
-    output:
-        seqtable = os.path.join(RESULTS, "seqtable.fasta"),
-        stats = os.path.join(RESULTS, "seqtable.stats"),
-        idx = os.path.join(RESULTS, "seqtable.fasta.fai")
-    benchmark:
-        os.path.join(BENCH, "PREPROCESSING", "s12.convert_seqtable_tab_2_fasta.txt")
-    log:
-        log = os.path.join(LOGS, "step_12", "s12.log")
-    resources:
-        mem_mb=100000,
-        cpus=64
-    conda:
-        "../envs/samtools.yaml"
-    shell:
-        """
-        # Convert
-        seqkit tab2fx {input} -j {config[System][Threads]} -w 5000 -t dna -o {output.seqtable};
-        
-        # Calculate seqtable statistics
-        seqkit stats {output.seqtable} -j {config[System][Threads]} -T > {output.stats};
-        
-        # Create seqtable index
-        samtools faidx {output.seqtable} -o {output.idx};
-        
-        """
-
-rule calculate_seqtable_sequence_properties:
-    """
-    
-    Step 13: Calculate additional sequence properties (ie. GC-content, tetramer frequencies) per sequence
-    
-    """
-    input:
-        os.path.join(RESULTS, "seqtable.fasta")
-    output:
-        gc = os.path.join(RESULTS, "seqtable_properties.gc"),
-        tetramer = os.path.join(RESULTS, "seqtable_properties.tetramer"),
-        seq_properties = os.path.join(RESULTS, "seqtable_properties.tsv")
-    benchmark:
-        os.path.join(BENCH, "PREPROCESSING", "s13.calculate_seqtable_sequence_properties.txt")
-    log:
-        log1 = os.path.join(LOGS, "step_13", "s13.gc.log"),
-        log2 = os.path.join(LOGS, "step_13", "s13.tetramer.log")
-    resources:
-        mem_mb=100000,
-        cpus=64
-    conda:
-        "../envs/bbmap.yaml"
-    shell:
-        """
-        # Calcualate per sequence GC content
-        countgc.sh in={input} format=2 ow=t | awk 'NF' > {output.gc};
-        sed -i '1i id\tGC' {output.gc} 2> {log.log1};
-        
-        # Calculate per sequence tetramer frequency
-        tetramerfreq.sh in={input} w=0 ow=t | \
-        tail -n+2 | \
-        cut --complement -f2 > {output.tetramer} 2> {log.log2};
-        
-        sed -i 's/scaffold/id/' {output.tetramer};
-        
-        # Combine
-        csvtk join -f 1 {output.gc} {output.tetramer} -t -T > {output.seq_properties};
-        
         """
 
 rule assembly_kmer_normalization:
