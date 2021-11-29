@@ -96,8 +96,8 @@ if len(SAMPLES) == 0:
     sys.exit()
 
 include: "rules/00_preprocessing.smk",
-include: "rules/01_assembly.smk",
-include: "rules/02_annotate.smk"
+include: "rules/01_assembly.smk"
+#include: "rules/02_annotate.smk"
 
 rule all:
     input:
