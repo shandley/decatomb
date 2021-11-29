@@ -1,0 +1,3 @@
+# Ignore directories created during running snakemake example data
+snakemake/workflow/.snakemake/
+snakemake/workflow/test_data_results/

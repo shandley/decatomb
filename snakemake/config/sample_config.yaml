@@ -7,16 +7,14 @@
 ##  \__,_|\___|\___\__,_|\__\___/|_| |_| |_|_.__/   ##
 ##                                                  ##
 ######################################################                                               
-                                               
+
 # For more information see: https://github.com/shandley/decatomb
+# Written by: Scott Handley (handley.scott@gmail.com), March 2021
 
 ---
-# !! You must check/change the following items !!
-# Databases: (change to the path of your hecatomb databases)
-# Host: (change to the name of the directory containing your masked host database)
-# Reads: (change to the location of your projects input reads)
-# Results: Location of where you want the results stored. Best practices should be in a directory (not a subdirectory) of your reads directory
-# System: Memory: Change to the max amount of memory used by bbtools (likely your max system memory)
+##################
+# Run Parameters #
+##################
 
 Paths:
   # The base database directory
@@ -26,7 +24,7 @@ Paths:
   # The reads directory has your input fastq files
   # Note: All of your results will go into this directory
 
-  Reads: ../../test_data
+  Reads: /mnt/data3/shandley/hecatomb_runs/test_data
   
   # Where do you want the results stored?
   # Recommended that you make a specific based dir (e.g. heactomb_runs) followed by project specific (e.g. test_data) for all of your runs
@@ -69,12 +67,3 @@ QSCORE: 15 # Read quality trimming score (rule remove_low_quality in 00_preproce
 READ_MINLENGTH: 100 # Minimum read length during QC steps (rule remove_low_quality in 00_preprocessing.smk)
 CONTIG_MINLENGTH: 1000 # Read minimum length (rule contig_reformating_and_stats in 00_preprocessing.smk)
 ENTROPY: 0.7 # Read minimum entropy (rule remove_low_quality in 00_preprocessing.smk)
-CLUSTERID: 0.97 # Linclust read clustering percent identity (rule cluster_similar_sequences: in 00_preprocessing.smk)
-
-## Taxonomic assignment (translated)
-PRIMAAE: 0.1 # Primary translated (nt-vs-aa) e-value
-SECAAE: 0.01 # Secondary translated (nt-vs-aa) e-value
-
-## Taxonomic assignment (untranslated)
-PRIMNTE: 0.01 # Primary untranslated (nt-vs-nt) e-value
-SECNTE: 0.001 # Secondary untranslated (nt-vs-nt) e-value
